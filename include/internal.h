@@ -11,13 +11,14 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <stdlib.h>
+#include <signal.h>
 
 
 #define FILE_NAME_SIZE 128
 #define FILE_PERMISSIONS 0644
 #define ERROR_MESSAGE "\e[0;34m[PSAR LOG]\e[0m - Error"
 #define TEST_FILE_FOLDER "files"
-#define NUMBER_OF_FILES 5
+#define NUMBER_OF_FILES 3
 #define NUMBER_OF_PROCESSES 2
 
 
@@ -25,6 +26,8 @@ bool create_files();
 bool create_processes();
 bool check_directory();
 bool add_content_files();
-bool tmp_process_read();
+bool tmp_process_read_write();
+void signalHandler(int sig);
+bool setupSignalHandler();
 
 #endif
