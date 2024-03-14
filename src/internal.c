@@ -62,7 +62,7 @@ bool tmp_process_read_write() {
         
         // Let's trigger a sigsev...
         mapped_region[0] = 'Z';
-        
+
         munmap(mapped_region, st.st_size);
         close(fd[i]);
     }
@@ -122,16 +122,30 @@ bool check_directory() {
     return true;
 }
 
-void signalHandler(int sig) {
-    printf("Handler caught SIGSEGV by process %d\n", getpid());
-    _exit(1);
+
+void signalHandler(int sig, siginfo_t * si, void * unused) {
+    printf("Handler caught SIGSEGV - write attempt by process %d\n", getpid());
+    void * fault_addr = si->si_addr;
+    unsigned long fault_page = (unsigned long)fault_addr & ~(PAGE_SIZE - 1);
+    void *new_page = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if(new_page == MAP_FAILED) {
+        perror("Failed to map new page");
+        _exit(EXIT_FAILURE);
+    }
+    memcpy(new_page, (void *)fault_page, PAGE_SIZE);
+    printf("Content copied to new page by process %d: %s\n", getpid(), (char*)new_page);
+    // TODO: update page table entry
+    // Attention: Without updating the page table entry the cpu will loop forever trying to
+    // write again on the read only page, so tmp exit.
+    // TODO: return and cpu will retry write
+    exit(1);
 }
 
 bool setupSignalHandler() {
     struct sigaction sa;
     sigemptyset(&sa.sa_mask); 
-    sa.sa_handler = signalHandler;
-    sa.sa_flags = 0;
+    sa.sa_sigaction = signalHandler;
+    sa.sa_flags = SA_SIGINFO;
 
     if(sigaction(SIGSEGV, &sa, NULL) == -1) {
         perror("sigaction setup for SIGSEGV failed");
@@ -139,3 +153,5 @@ bool setupSignalHandler() {
     }
     return true;
 }
+
+/*parismollo@parismollo:~/Github/Master/S2/PSAR/PSAR$ getconf PAGESIZE 4096*/
