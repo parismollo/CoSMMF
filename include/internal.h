@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <ucontext.h>
-
+#include "ptedit_header.h"
 
 
 #define FILE_NAME_SIZE 128
