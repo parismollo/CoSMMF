@@ -145,6 +145,7 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
     printf("Faulting address (aligned): %p\n", fault_addr);
 
     // Log virtual to physical translation before changes
+    printf("Before Update: ");
     log_virtual_to_physical(fault_addr);
 
     // Allocate a new page with read-write permissions
@@ -169,9 +170,6 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
     ptedit_entry_t fault_entry = ptedit_resolve(fault_addr, 0);
     ptedit_entry_t new_page_entry = ptedit_resolve(new_page, 0);
 
-    ptedit_entry_t before_update = ptedit_resolve(fault_addr, 0);
-    printf("Before update - PTE: %zu", before_update.pte);
-
     // Map the page table for the faulting address into user space
     size_t pt_pfn = ptedit_cast(fault_entry.pmd, ptedit_pmd_t).pfn;
     char* pt = ptedit_pmap(pt_pfn * ptedit_get_pagesize(), ptedit_get_pagesize());
@@ -187,11 +185,8 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
     ptedit_invalidate_tlb(fault_addr);
 
     // Log virtual to physical translation after changes
+    printf("After Update: ");
     log_virtual_to_physical(fault_addr);
-
-    // After updating the page table entry
-    ptedit_entry_t after_update = ptedit_resolve(fault_addr, 0);
-    printf("After update - PTE: %zu", after_update.pte);
 
     sleep(2);
 }
