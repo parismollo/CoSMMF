@@ -64,11 +64,9 @@ bool tmp_process_read_write() {
         }
         
         printf("Process %d reads first letter of %s : [%c]\n", getpid(), file_name, mapped_region[0]);
-        
         // Let's trigger a sigsev...
         memset(mapped_region, 'Z', 1);
         printf("Reading new mapped region %c\n", mapped_region[0]);
-
         munmap(mapped_region, st.st_size);
         close(fd[i]);
     }
@@ -128,63 +126,75 @@ bool check_directory() {
     return true;
 }
 
+// Function to log the virtual to physical address translation
+void log_virtual_to_physical(void* address) {
+    ptedit_entry_t entry = ptedit_resolve(address, 0);
+    size_t pfn = ptedit_get_pfn(entry.pte);
+    printf("Virtual address %p -> Physical Frame Number (PFN): %zu\n", address, pfn);
+}
+
+// Function to align an address to the nearest page boundary
+void* align_to_page_boundary(void* address) {
+    return (void*)((size_t)address & ~(PAGE_SIZE - 1));
+}
 
 void signalHandler(int sig, siginfo_t * si, void * unused) {
     printf("Handler caught SIGSEGV - write attempt by process %d\n", getpid());
     void * fault_addr = si->si_addr;
-    printf("Faulting address: %p\n", fault_addr); // Print the faulting address
-    
+    fault_addr = align_to_page_boundary(fault_addr); // Ensure fault_addr is page-aligned
+    printf("Faulting address (aligned): %p\n", fault_addr);
+
+    // Log virtual to physical translation before changes
+    log_virtual_to_physical(fault_addr);
+
+    // Allocate a new page with read-write permissions
     void *new_page = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (new_page == MAP_FAILED) {
         perror("Failed to map new page");
         _exit(EXIT_FAILURE);
     }
-    printf("New page mapped at: %p\n", new_page); // Print the newly mapped page address
-    
+    printf("New page mapped at: %p\n", new_page);
+
+    // Copy the content from the faulting page to the new page
     memcpy(new_page, fault_addr, PAGE_SIZE);
-    printf("Content copied to new page by process %d: %s\n", getpid(), (char*)new_page);
+    printf("Content copied to new page by process %d\n", getpid());
+
+    // Ensure the new page has read-write permissions
+    if (mprotect(new_page, PAGE_SIZE, PROT_READ | PROT_WRITE) == -1) {
+        perror("mprotect failed for new page");
+        _exit(EXIT_FAILURE);
+    }
 
     // Resolve the page table entry for both the faulting and new page addresses
     ptedit_entry_t fault_entry = ptedit_resolve(fault_addr, 0);
-    printf("1\n");
-    
+    ptedit_entry_t new_page_entry = ptedit_resolve(new_page, 0);
+
+    ptedit_entry_t before_update = ptedit_resolve(fault_addr, 0);
+    printf("Before update - PTE: %zu", before_update.pte);
+
     // Map the page table for the faulting address into user space
     size_t pt_pfn = ptedit_cast(fault_entry.pmd, ptedit_pmd_t).pfn;
     char* pt = ptedit_pmap(pt_pfn * ptedit_get_pagesize(), ptedit_get_pagesize());
-    printf("2\n");
 
     // Calculate the index into the page table for the faulting address
     size_t entry_index = (((size_t)fault_addr) >> 12) & 0x1FF;
     size_t *mapped_entry = ((size_t *)pt) + entry_index;
-    printf("3\n");
-
-    // Resolve the entry for the new page to get its PFN
-    ptedit_entry_t new_page_entry = ptedit_resolve(new_page, 0);
-    printf("4\n");
 
     // Set the faulting address's page table entry to point to the new page's PFN
     *mapped_entry = ptedit_set_pfn(*mapped_entry, ptedit_get_pfn(new_page_entry.pte));
-    printf("5\n");
 
     // Invalidate the TLB for the faulting address to ensure the changes are applied
     ptedit_invalidate_tlb(fault_addr);
-    printf("6\n");
-    
-    ptedit_entry_t updated_entry = ptedit_resolve(fault_addr, 0);
-    size_t updated_pfn = ptedit_get_pfn(updated_entry.pte);
-    printf("7\n");
 
-    // Verify the PFN matches the new page's PFN
-    if (updated_pfn == ptedit_get_pfn(new_page_entry.pte)) {
-        printf("Page table entry update successful.\n");
-    } else {
-        printf("Page table entry update failed.\n");
-    }
-    // Do not exit; allow the write to proceed on the new page
+    // Log virtual to physical translation after changes
+    log_virtual_to_physical(fault_addr);
+
+    // After updating the page table entry
+    ptedit_entry_t after_update = ptedit_resolve(fault_addr, 0);
+    printf("After update - PTE: %zu", after_update.pte);
+
     sleep(2);
 }
-
-
 
 bool setupSignalHandler() {
     struct sigaction sa;
