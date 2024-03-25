@@ -1,22 +1,36 @@
 #include "internal.h"
 
 bool create_processes() {
+    sem_t *sem = sem_open(SEM_NAME, O_CREAT, 0666, 1);
+    if (sem == SEM_FAILED) {
+        perror("sem_open failed");
+        return false;
+    }
     int pids[NUMBER_OF_PROCESSES];
     for(int i=0; i < NUMBER_OF_PROCESSES; i++) {
         pids[i] = fork();
         if(pids[i] < 0) {
+            sem_close(sem);
+            sem_unlink(SEM_NAME);
             perror(ERROR_MESSAGE);
             return false;
         } else if (pids[i] == 0) {
+            sem_wait(sem);
             if (ptedit_init()) {
                 printf("error ptedit init");
+                sem_post(sem);
                 return 1;
             }
+            printf("\n\nStarting writing tests...\n");
             if(!tmp_process_read_write()){
                 perror(ERROR_MESSAGE); 
+                ptedit_cleanup();
+                sem_post(sem);
                 exit(EXIT_FAILURE);
+
             }
             ptedit_cleanup();
+            sem_post(sem);
             exit(EXIT_SUCCESS);
         }
     }
@@ -34,6 +48,8 @@ bool create_processes() {
         }
     }
 
+    sem_close(sem);
+    sem_unlink(SEM_NAME);
     printf("All child processes have finished\n");
     return true;
 }
@@ -66,7 +82,7 @@ bool tmp_process_read_write() {
         printf("Process %d reads first letter of %s : [%c]\n", getpid(), file_name, mapped_region[0]);
         // Let's trigger a sigsev...
         memset(mapped_region, 'Z', 1);
-        printf("Reading new mapped region %c\n", mapped_region[0]);
+        printf("Reading new mapped region [%c]\n", mapped_region[0]);
         munmap(mapped_region, st.st_size);
         close(fd[i]);
     }
