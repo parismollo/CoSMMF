@@ -167,7 +167,7 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
     }
 
     // Resolve the page table entry for both the faulting and new page addresses
-    ptedit_entry_t fault_entry = ptedit_resolve(fault_addr, 0);
+    ptedit_entry_t fault_entry = ptedit_resolve(fault_addr, 0); //
     ptedit_entry_t new_page_entry = ptedit_resolve(new_page, 0);
 
     // Map the page table for the faulting address into user space
@@ -181,6 +181,8 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
     // Set the faulting address's page table entry to point to the new page's PFN
     *mapped_entry = ptedit_set_pfn(*mapped_entry, ptedit_get_pfn(new_page_entry.pte));
 
+    ptedit_update(fault_addr, 0, &new_page_entry);
+
     // Invalidate the TLB for the faulting address to ensure the changes are applied
     ptedit_invalidate_tlb(fault_addr);
 
@@ -188,7 +190,7 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
     printf("After Update: ");
     log_virtual_to_physical(fault_addr);
 
-    sleep(2);
+    // sleep(2);
 }
 
 bool setupSignalHandler() {
