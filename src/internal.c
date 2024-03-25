@@ -66,7 +66,8 @@ bool tmp_process_read_write() {
         printf("Process %d reads first letter of %s : [%c]\n", getpid(), file_name, mapped_region[0]);
         
         // Let's trigger a sigsev...
-        mapped_region[0] = 'Z';
+        memset(mapped_region, 'Z', 1);
+        printf("Reading new mapped region %c\n", mapped_region[0]);
 
         munmap(mapped_region, st.st_size);
         close(fd[i]);
@@ -131,53 +132,58 @@ bool check_directory() {
 void signalHandler(int sig, siginfo_t * si, void * unused) {
     printf("Handler caught SIGSEGV - write attempt by process %d\n", getpid());
     void * fault_addr = si->si_addr;
-    void * page_aligned_fault_addr = (void*)((uintptr_t)fault_addr & ~(PAGE_SIZE - 1));
+    printf("Faulting address: %p\n", fault_addr); // Print the faulting address
+    
     void *new_page = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (new_page == MAP_FAILED) {
         perror("Failed to map new page");
         _exit(EXIT_FAILURE);
     }
-    memcpy(new_page, page_aligned_fault_addr, PAGE_SIZE);
+    printf("New page mapped at: %p\n", new_page); // Print the newly mapped page address
+    
+    memcpy(new_page, fault_addr, PAGE_SIZE);
     printf("Content copied to new page by process %d: %s\n", getpid(), (char*)new_page);
 
     // Resolve the page table entry for both the faulting and new page addresses
-    ptedit_entry_t fault_entry = ptedit_resolve(page_aligned_fault_addr, 0);
+    ptedit_entry_t fault_entry = ptedit_resolve(fault_addr, 0);
     printf("1\n");
     
-    // // Map the page table for the faulting address into user space
+    // Map the page table for the faulting address into user space
     size_t pt_pfn = ptedit_cast(fault_entry.pmd, ptedit_pmd_t).pfn;
     char* pt = ptedit_pmap(pt_pfn * ptedit_get_pagesize(), ptedit_get_pagesize());
     printf("2\n");
 
-    // // Calculate the index into the page table for the faulting address
-    size_t entry_index = (((size_t)page_aligned_fault_addr) >> 12) & 0x1FF;
+    // Calculate the index into the page table for the faulting address
+    size_t entry_index = (((size_t)fault_addr) >> 12) & 0x1FF;
     size_t *mapped_entry = ((size_t *)pt) + entry_index;
     printf("3\n");
 
-    // // Resolve the entry for the new page to get its PFN
+    // Resolve the entry for the new page to get its PFN
     ptedit_entry_t new_page_entry = ptedit_resolve(new_page, 0);
     printf("4\n");
 
-    // // Set the faulting address's page table entry to point to the new page's PFN
+    // Set the faulting address's page table entry to point to the new page's PFN
     *mapped_entry = ptedit_set_pfn(*mapped_entry, ptedit_get_pfn(new_page_entry.pte));
     printf("5\n");
 
-    // // Invalidate the TLB for the faulting address to ensure the changes are applied
-    ptedit_invalidate_tlb(page_aligned_fault_addr);
+    // Invalidate the TLB for the faulting address to ensure the changes are applied
+    ptedit_invalidate_tlb(fault_addr);
     printf("6\n");
     
-    ptedit_entry_t updated_entry = ptedit_resolve(page_aligned_fault_addr, 0);
+    ptedit_entry_t updated_entry = ptedit_resolve(fault_addr, 0);
     size_t updated_pfn = ptedit_get_pfn(updated_entry.pte);
     printf("7\n");
 
-    // // Verify the PFN matches the new page's PFN
+    // Verify the PFN matches the new page's PFN
     if (updated_pfn == ptedit_get_pfn(new_page_entry.pte)) {
         printf("Page table entry update successful.\n");
     } else {
         printf("Page table entry update failed.\n");
     }
     // Do not exit; allow the write to proceed on the new page
+    sleep(2);
 }
+
 
 
 bool setupSignalHandler() {
