@@ -8,14 +8,14 @@ void log_message(LogLevel level, const char* format, ...) {
     char* time_str = ctime(&now);
     time_str[strlen(time_str) - 1] = '\0';
 
-
     const char* color_red = "\033[1;31m";
     const char* color_blue = "\033[1;34m";
     const char* color_yellow = "\033[1;33m";
+    const char* color_green = "\033[1;32m";
     const char* color_reset = "\033[0m";
 
-    const char* level_strs[] = {"INFO", "ERROR", "DEBUG"};
-    const char* level_colors[] = {color_blue, color_red, color_yellow};
+    const char* level_strs[] = {"INFO", "END", "DEBUG", "UPDATE"};
+    const char* level_colors[] = {color_blue, color_red, color_yellow, color_green};
 
     printf("%s[%s] [%s]%s ", level_colors[level], time_str, level_strs[level], color_reset);
     vprintf(format, args);
@@ -23,6 +23,7 @@ void log_message(LogLevel level, const char* format, ...) {
 
     va_end(args);
 }
+
 
 bool launch_processes() {
     sem_t *sem = sem_open(SEM_NAME, O_CREAT, 0666, 1);
@@ -39,7 +40,9 @@ bool launch_processes() {
             //log_message(LOG_ERROR, "fork failed: %s", strerror(errno));
             return false;
         } else if (pids[i] == 0) {
+            log_message(LOG_UPDATE, "Process %d created", getpid());
             sem_wait(sem);
+            log_message(LOG_UPDATE, "Process %d acquired pteditor lock", getpid());
             if (ptedit_init()) {
                 //log_message(LOG_ERROR, "error ptedit init");
                 sem_post(sem);
@@ -55,6 +58,7 @@ bool launch_processes() {
             }
             ptedit_cleanup();
             sem_post(sem);
+            log_message(LOG_UPDATE, "Process %d released pteditor lock", getpid());
             exit(EXIT_SUCCESS);
         }
     }
@@ -123,7 +127,7 @@ bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len,
     close(log_fd);
 
     memcpy(mapped_region + offset, data, len);
-
+    log_message(LOG_UPDATE, "Process %d logged %s", getpid(), log_file_path);
     return true;
 }
 
@@ -197,14 +201,16 @@ bool merge(const char* original_file_path, const char* log_file_path) {
     close(original_fd);
     close(log_fd);
     close(merged_fd);
-
+    log_message(LOG_UPDATE, "merge created for file %s", original_file_name);
     return true;
 }
 
 bool demo_read_write() {
+    log_message(LOG_UPDATE, "Process %d started reading and write routine", getpid());
     int fd[NUMBER_OF_FILES];
     char file_name[FILE_NAME_SIZE];
-    for(int i=0; i < NUMBER_OF_FILES; i++) {
+    int i = 0;
+    for(; i < NUMBER_OF_FILES; i++) {
         snprintf(file_name, FILE_NAME_SIZE, "files/file_%d", i);
         fd[i] = open(file_name, O_RDONLY);
         
@@ -227,12 +233,13 @@ bool demo_read_write() {
         }
         
         //log_message(LOG_INFO, "Process %d reads %s before write: [%s]\n", getpid(), file_name, mapped_region);
-        const char * testing = "WOW";
-        psar_write(mapped_region, 10, testing, strlen(testing), st.st_size, i);
+        // const char * testing = "WOW";
+        psar_write(mapped_region, WRITE_OFFSET, WRITE_DEMO, strlen(WRITE_DEMO), st.st_size, i);
         //log_message(LOG_INFO, "Process %d reading new mapped region [%s]\n", getpid(), mapped_region);
         munmap(mapped_region, st.st_size);
         close(fd[i]);
     }
+    log_message(LOG_UPDATE, "Process %d modified %d files", getpid(), i);
     return true;
 }
 
@@ -254,6 +261,7 @@ void ensure_directories_exist() {
             }
         }
     }
+    log_message(LOG_UPDATE, "Folders log, merge and files created");
 }
 
 bool create_files() {
@@ -261,8 +269,8 @@ bool create_files() {
     int fd;
 
     // if(!check_directory()) return false;
-
-    for(int i=0; i < NUMBER_OF_FILES; i++) {
+    int i = 0;
+    for(; i < NUMBER_OF_FILES; i++) {
         snprintf(file_name, FILE_NAME_SIZE, "files/file_%d", i);
         fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, FILE_PERMISSIONS);
         if(fd == -1) {
@@ -271,6 +279,7 @@ bool create_files() {
         }
         close(fd);
     }
+    log_message(LOG_UPDATE, "%d files were created", i);
     return true;
 }
 
@@ -292,6 +301,7 @@ bool add_content_files() {
         }
         close(fd);
     }
+    log_message(LOG_UPDATE, "Data written to files");
     return true;
 }
 
@@ -321,7 +331,7 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
     fault_addr = align_to_page_boundary(fault_addr);
     //log_message(LOG_INFO, "Faulting address (aligned): %p\n", fault_addr);
 
-    log_virtual_to_physical(fault_addr);
+    // log_virtual_to_physical(fault_addr);
 
     void *new_page = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (new_page == MAP_FAILED) {
@@ -353,7 +363,8 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
 
     ptedit_invalidate_tlb(fault_addr);
 
-    log_virtual_to_physical(fault_addr);
+    // log_virtual_to_physical(fault_addr);
+    log_message(LOG_UPDATE, "Process %d updated virtual address %p to new physical address %zu", getpid(), fault_addr, (new_page_entry.pte));
 }
 
 bool setupSignalHandler() {
@@ -366,5 +377,12 @@ bool setupSignalHandler() {
         //log_message(LOG_ERROR, "sigaction setup for SIGSEGV failed: %s", strerror(errno));
         return false;
     }
+    log_message(LOG_UPDATE, "SIGSEGV Signal Handler updated");
     return true;
+}
+
+void show_diff(const char *file1, const char *file2) {
+    char command[256];
+    snprintf(command, sizeof(command), "diff %s %s", file1, file2);
+    system(command);
 }
