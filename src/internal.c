@@ -89,7 +89,7 @@ bool ensure_directory_exists(const char* dir_path) {
     return true;
 }
 
-bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len, size_t region_size) {
+bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len, size_t region_size, int file_number) {
     if (offset + len > region_size) {
         //log_message(LOG_ERROR, "Write operation exceeds mapped region bounds.");
         return false;
@@ -107,7 +107,7 @@ bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len,
     char timestamp[64];
     strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", localtime(&now));
     char log_file_path[512];
-    snprintf(log_file_path, sizeof(log_file_path), "%s/log_%s.log", log_dir_path, timestamp);
+    snprintf(log_file_path, sizeof(log_file_path), "%s/log_f%d_%s.log", log_dir_path, file_number, timestamp);
 
     
     int log_fd = open(log_file_path, O_WRONLY | O_CREAT | O_APPEND, 0666);
@@ -228,7 +228,7 @@ bool demo_read_write() {
         
         //log_message(LOG_INFO, "Process %d reads %s before write: [%s]\n", getpid(), file_name, mapped_region);
         const char * testing = "WOW";
-        psar_write(mapped_region, 10, testing, strlen(testing), st.st_size);
+        psar_write(mapped_region, 10, testing, strlen(testing), st.st_size, i);
         //log_message(LOG_INFO, "Process %d reading new mapped region [%s]\n", getpid(), mapped_region);
         munmap(mapped_region, st.st_size);
         close(fd[i]);
