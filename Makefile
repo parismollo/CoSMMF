@@ -11,5 +11,6 @@ internal_tests: src/internal.c tests/internal_tests.c
 clean:
 	rm -f internal_tests
 	rm -f files/*
+	rm -rf logs/*
 	
 

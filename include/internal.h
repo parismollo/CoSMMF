@@ -29,13 +29,21 @@
 #define PAGE_SIZE 4096 /* Todo: Add function to get this dynamically */
 #define SEM_NAME "/pteditor_semaphore"
 
+typedef enum { LOG_INFO, LOG_ERROR, LOG_DEBUG } LogLevel;
+
 
 bool create_files();
 bool create_processes();
 bool check_directory();
 bool add_content_files();
-bool tmp_process_read_write();
+bool process_read_write();
 void signalHandler(int sig, siginfo_t * si, void * unused);
 bool setupSignalHandler();
+void log_message(LogLevel level, const char* format, ...);
+void log_virtual_to_physical(void* address);
+void* align_to_page_boundary(void* address);
+bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len, size_t region_size);
+bool ensure_log_directory_exists(const char* dir_path);
+
 
 #endif
