@@ -26,38 +26,38 @@ void log_message(LogLevel level, const char* format, ...) {
 
 
 bool launch_processes() {
-    sem_t *sem = sem_open(SEM_NAME, O_CREAT, 0666, 1);
-    if (sem == SEM_FAILED) {
-        //log_message(LOG_ERROR, "sem_open failed: %s", strerror(errno));
-        return false;
-    }
+    // sem_t *sem = sem_open(SEM_NAME, O_CREAT, 0666, 1);
+    // if (sem == SEM_FAILED) {
+    //     //log_message(LOG_ERROR, "sem_open failed: %s", strerror(errno));
+    //     return false;
+    // }
+    ptedit_init();
     int pids[NUMBER_OF_PROCESSES];
     for(int i=0; i < NUMBER_OF_PROCESSES; i++) {
         pids[i] = fork();
         if(pids[i] < 0) {
-            sem_close(sem);
-            sem_unlink(SEM_NAME);
+            // sem_close(sem);
+            // sem_unlink(SEM_NAME);
             //log_message(LOG_ERROR, "fork failed: %s", strerror(errno));
             return false;
         } else if (pids[i] == 0) {
             log_message(LOG_UPDATE, "Process %d created", getpid());
-            sem_wait(sem);
+            // sem_wait(sem);
             log_message(LOG_UPDATE, "Process %d acquired pteditor lock", getpid());
-            if (ptedit_init()) {
-                //log_message(LOG_ERROR, "error ptedit init");
-                sem_post(sem);
-                return 1;
-            }
+            // if (ptedit_init()) {
+            //     //log_message(LOG_ERROR, "error ptedit init");
+            //     // sem_post(sem);
+            //     return 1;
+            // }
             //log_message(LOG_DEBUG, "Starting writing tests...\n");
             if(!demo_read_write()){
                 //log_message(LOG_ERROR, "write failed: %s", strerror(errno)); 
                 ptedit_cleanup();
-                sem_post(sem);
+                // sem_post(sem);
                 exit(EXIT_FAILURE);
 
             }
-            ptedit_cleanup();
-            sem_post(sem);
+            // sem_post(sem);
             log_message(LOG_UPDATE, "Process %d released pteditor lock", getpid());
             exit(EXIT_SUCCESS);
         }
@@ -76,9 +76,10 @@ bool launch_processes() {
         }
     }
 
-    sem_close(sem);
-    sem_unlink(SEM_NAME);
+    // sem_close(sem);
+    // sem_unlink(SEM_NAME);
     //log_message(LOG_INFO, "All child processes have finished\n");
+    ptedit_cleanup();
     return true;
 }
 
