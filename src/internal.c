@@ -52,7 +52,6 @@ bool launch_processes() {
             //log_message(LOG_DEBUG, "Starting writing tests...\n");
             if(!demo_read_write()){
                 //log_message(LOG_ERROR, "write failed: %s", strerror(errno)); 
-                ptedit_cleanup();
                 // sem_post(sem);
                 exit(EXIT_FAILURE);
 
