@@ -24,8 +24,8 @@
 #define FILE_PERMISSIONS 0644
 #define ERROR_MESSAGE "\e[0;34m[PSAR LOG]\e[0m - Error"
 #define TEST_FILE_FOLDER "files"
-#define NUMBER_OF_FILES 1
-#define NUMBER_OF_PROCESSES 3
+#define NUMBER_OF_FILES 2
+#define NUMBER_OF_PROCESSES 2
 #define PAGE_SIZE 4096 /* Todo: Add function to get this dynamically */
 #define SEM_NAME "/pteditor_semaphore"
 #define DATA_DEMO "Hello PSAR Project!"
@@ -51,5 +51,6 @@ bool merge(const char* original_file_path, const char* log_file_path);
 void setup();
 void ensure_directories_exist();
 void show_diff(const char *file1, const char *file2);
+bool merge_all(const char* original_file_path);
 
 #endif
