@@ -26,7 +26,7 @@
 #define ERROR_MESSAGE "\e[0;34m[PSAR LOG]\e[0m - Error"
 #define TEST_FILE_FOLDER "files"
 #define NUMBER_OF_FILES 1
-#define NUMBER_OF_PROCESSES 1
+#define NUMBER_OF_PROCESSES 5
 #define PAGE_SIZE 4096 /* Todo: Add function to get this dynamically */
 #define SEM_NAME "/pteditor_semaphore"
 #define DATA_DEMO "Hello PSAR Project!"

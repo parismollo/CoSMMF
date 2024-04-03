@@ -26,38 +26,20 @@ void log_message(LogLevel level, const char* format, ...) {
 
 
 bool launch_processes() {
-    // sem_t *sem = sem_open(SEM_NAME, O_CREAT, 0666, 1);
-    // if (sem == SEM_FAILED) {
-    //     //log_message(LOG_ERROR, "sem_open failed: %s", strerror(errno));
-    //     return false;
-    // }
     ptedit_init();
     int pids[NUMBER_OF_PROCESSES];
     for(int i=0; i < NUMBER_OF_PROCESSES; i++) {
         pids[i] = fork();
         if(pids[i] < 0) {
-            // sem_close(sem);
-            // sem_unlink(SEM_NAME);
-            //log_message(LOG_ERROR, "fork failed: %s", strerror(errno));
+            log_message(LOG_ERROR, "fork failed: %s", strerror(errno));
             return false;
         } else if (pids[i] == 0) {
             log_message(LOG_UPDATE, "Process %d created", getpid());
-            // sem_wait(sem);
-            log_message(LOG_UPDATE, "Process %d acquired pteditor lock", getpid());
-            // if (ptedit_init()) {
-            //     //log_message(LOG_ERROR, "error ptedit init");
-            //     // sem_post(sem);
-            //     return 1;
-            // }
-            //log_message(LOG_DEBUG, "Starting writing tests...\n");
             if(!demo_read_write()){
-                //log_message(LOG_ERROR, "write failed: %s", strerror(errno)); 
-                // sem_post(sem);
+                log_message(LOG_ERROR, "write failed: %s", strerror(errno)); 
                 exit(EXIT_FAILURE);
 
             }
-            // sem_post(sem);
-            log_message(LOG_UPDATE, "Process %d released pteditor lock", getpid());
             exit(EXIT_SUCCESS);
         }
     }
@@ -66,18 +48,16 @@ bool launch_processes() {
     for(int i=0; i < NUMBER_OF_PROCESSES; i++) {
         waitpid(pids[i], &status, 0);
         if(WIFEXITED(status)) {
-            //log_message(LOG_INFO, "Child process %d returned with status %d\n", pids[i], WEXITSTATUS(status));
+            log_message(LOG_INFO, "Child process %d returned with status %d\n", pids[i], WEXITSTATUS(status));
         } else if(WIFSIGNALED(status)) {
-            //log_message(LOG_INFO,"Child process %d was terminated by a signal %d - ", pids[i], WTERMSIG(status));
+            log_message(LOG_INFO,"Child process %d was terminated by a signal %d - ", pids[i], WTERMSIG(status));
             if(WTERMSIG(status) == SIGSEGV) {
-                //log_message(LOG_INFO, "That was due a segmentation fault\n");
+                log_message(LOG_INFO, "That was due a segmentation fault\n");
             }
         }
     }
 
-    // sem_close(sem);
-    // sem_unlink(SEM_NAME);
-    //log_message(LOG_INFO, "All child processes have finished\n");
+    log_message(LOG_INFO, "All child processes have finished\n");
     ptedit_cleanup();
     return true;
 }
@@ -180,7 +160,6 @@ bool merge(const char* original_file_path, const char* log_file_path) {
         write(merged_fd, buffer, bytes_read);
     }
 
-    // Apply merge between log file and target file.
     char log_line[1024];
     ssize_t read_size;
     lseek(log_fd, 0, SEEK_SET);
@@ -210,7 +189,6 @@ bool merge(const char* original_file_path, const char* log_file_path) {
 }
 
 void applyMerge(int to_fd, int from_fd) {
-    // Apply merge between log file and target file.
     char log_line[1024];
     ssize_t read_size;
     lseek(from_fd, 0, SEEK_SET);
@@ -254,7 +232,6 @@ bool isLogFile(const char *filename, const char *target) {
 }
 
 bool merge_all(char * source_file_path) {
-    // open source file
     int source_file_fd = open(source_file_path, O_RDONLY);
     if (source_file_fd == -1) {
         perror("Failed to open original file");
@@ -265,15 +242,12 @@ bool merge_all(char * source_file_path) {
     if (!original_file_name) original_file_name = source_file_path;
     else original_file_name++;
 
-    // printf("merge_all: %s", original_file_name);
-
     char merged_file_path[512];
     snprintf(merged_file_path, sizeof(merged_file_path), "merge/merge_all_%s", original_file_name);
     int merged_all_fd = open(merged_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (merged_all_fd == -1) {
         perror("Failed to create merged file");
         close(source_file_fd);
-        // close(log_fd);
         return false;
     }
 
@@ -344,10 +318,7 @@ bool demo_read_write() {
             return false;
         }
         
-        //log_message(LOG_INFO, "Process %d reads %s before write: [%s]\n", getpid(), file_name, mapped_region);
-        // const char * testing = "WOW";
         psar_write(mapped_region, WRITE_OFFSET, WRITE_DEMO, strlen(WRITE_DEMO), st.st_size, file_name);
-        //log_message(LOG_INFO, "Process %d reading new mapped region [%s]\n", getpid(), mapped_region);
         munmap(mapped_region, st.st_size);
         close(fd[i]);
     }
@@ -379,14 +350,12 @@ void ensure_directories_exist() {
 bool create_files() {
     char file_name[FILE_NAME_SIZE];
     int fd;
-
-    // if(!check_directory()) return false;
     int i = 0;
     for(; i < NUMBER_OF_FILES; i++) {
         snprintf(file_name, FILE_NAME_SIZE, "files/file%d", i);
         fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, FILE_PERMISSIONS);
         if(fd == -1) {
-            //log_message(LOG_ERROR, "open failed: %s", strerror(errno));
+            log_message(LOG_ERROR, "open failed: %s", strerror(errno));
             return false;
         }
         close(fd);
@@ -398,17 +367,16 @@ bool create_files() {
 bool add_content_files() {
     char file_name[FILE_NAME_SIZE];
     int fd;
-    // if(!check_directory()) return false;
     for(int i=0; i < NUMBER_OF_FILES; i++) {
         snprintf(file_name, FILE_NAME_SIZE, "files/file%d", i);
         fd = open(file_name, O_WRONLY, FILE_PERMISSIONS);
         if(fd == -1) {
-            //log_message(LOG_ERROR, "open failed: %s", strerror(errno));
+            log_message(LOG_ERROR, "open failed: %s", strerror(errno));
             return false;
         }
         ssize_t bytes = write(fd, DATA_DEMO, strlen(DATA_DEMO));        
         if(bytes == -1) {
-            //log_message(LOG_ERROR, "write failed: %s", strerror(errno));
+            log_message(LOG_ERROR, "write failed: %s", strerror(errno));
             return false;
         }
         close(fd);
@@ -420,7 +388,7 @@ bool add_content_files() {
 bool check_directory() {
     if(mkdir(TEST_FILE_FOLDER, 0755)) {
         if(errno != EEXIST) {
-            //log_message(LOG_ERROR, "mkdir failed: %s", strerror(errno));
+            log_message(LOG_ERROR, "mkdir failed: %s", strerror(errno));
             return false;
         }
     }
@@ -438,12 +406,10 @@ void* align_to_page_boundary(void* address) {
 }
 
 void signalHandler(int sig, siginfo_t * si, void * unused) {
-    //log_message(LOG_INFO, "Handler caught SIGSEGV - write attempt by process %d\n", getpid());
+    log_message(LOG_INFO, "Handler caught SIGSEGV - write attempt by process %d\n", getpid());
     void * fault_addr = si->si_addr;
     fault_addr = align_to_page_boundary(fault_addr);
     //log_message(LOG_INFO, "Faulting address (aligned): %p\n", fault_addr);
-
-    // log_virtual_to_physical(fault_addr);
 
     void *new_page = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (new_page == MAP_FAILED) {
@@ -475,7 +441,6 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
 
     ptedit_invalidate_tlb(fault_addr);
 
-    // log_virtual_to_physical(fault_addr);
     log_message(LOG_UPDATE, "Process %d updated virtual address %p to new physical address %zu", getpid(), fault_addr, (new_page_entry.pte));
 }
 
