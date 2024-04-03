@@ -17,6 +17,7 @@
 #include <semaphore.h>
 #include <time.h>
 #include <stdarg.h>
+#include <dirent.h>
 #include "ptedit_header.h"
 
 
@@ -51,4 +52,6 @@ bool merge(const char* original_file_path, const char* log_file_path);
 void setup();
 void ensure_directories_exist();
 void show_diff(const char *file1, const char *file2);
+bool merge_all(char * source_file_path);
+bool isLogFile(const char *filename, const char *target);
 #endif

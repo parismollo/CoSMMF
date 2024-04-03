@@ -107,8 +107,6 @@ bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len,
         return false;
     }
 
-    // printf("log path: %s", file_name);
-
     const char* original_file_name = strrchr(file_name, '/');
     if (!original_file_name) original_file_name = file_name;
     else original_file_name++;
@@ -208,6 +206,114 @@ bool merge(const char* original_file_path, const char* log_file_path) {
     close(log_fd);
     close(merged_fd);
     log_message(LOG_UPDATE, "merge created for file %s", original_file_name);
+    return true;
+}
+
+void applyMerge(int to_fd, int from_fd) {
+    // Apply merge between log file and target file.
+    char log_line[1024];
+    ssize_t read_size;
+    lseek(from_fd, 0, SEEK_SET);
+    while ((read_size = read(from_fd, log_line, sizeof(log_line) - 1)) > 0) {
+        log_line[read_size] = '\0';
+        char* ptr = log_line;
+        while (ptr < log_line + read_size) {
+            char* end_ptr = strchr(ptr, '\n');
+            if (!end_ptr) break;
+            *end_ptr = '\0';
+            off_t offset;
+            size_t len;
+            char data[512];
+            if (sscanf(ptr, "Offset: %ld, Length: %zu, Data: %[^\n]", &offset, &len, data) == 3) {
+                lseek(to_fd, offset, SEEK_SET);
+                write(to_fd, data, strlen(data));
+            }
+            ptr = end_ptr + 1;
+        }
+    }
+}
+
+bool isLogFile(const char *filename, const char *target) {
+    const char *dot = strrchr(filename, '.');
+    if (!dot || strcmp(dot, ".log") != 0) {
+        return false;
+    }
+
+    const char *underscore = strchr(filename, '_');
+    if (!underscore) {
+        return false;
+    }
+
+
+    const char *subString = underscore + 1;
+    if (strstr(subString, target) == subString) {
+        return true;
+    }
+
+    return false;
+}
+
+bool merge_all(char * source_file_path) {
+    // open source file
+    int source_file_fd = open(source_file_path, O_RDONLY);
+    if (source_file_fd == -1) {
+        perror("Failed to open original file");
+        return false;
+    }
+
+    const char* original_file_name = strrchr(source_file_path, '/');
+    if (!original_file_name) original_file_name = source_file_path;
+    else original_file_name++;
+
+    // printf("merge_all: %s", original_file_name);
+
+    char merged_file_path[512];
+    snprintf(merged_file_path, sizeof(merged_file_path), "merge/merge_all_%s", original_file_name);
+    int merged_all_fd = open(merged_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (merged_all_fd == -1) {
+        perror("Failed to create merged file");
+        close(source_file_fd);
+        // close(log_fd);
+        return false;
+    }
+
+    char buffer[1024];
+    ssize_t bytes_read;
+    while ((bytes_read = read(source_file_fd, buffer, sizeof(buffer))) > 0) {
+        write(merged_all_fd, buffer, bytes_read);
+    }
+
+    char log_path[1024];
+    DIR * d;
+    struct dirent *dir;
+    d = opendir("logs");
+    if(d) {
+        while((dir = readdir(d)) != NULL) {
+            if(dir->d_type == DT_DIR && strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..")!=0) {
+                char path[1024];
+                snprintf(path, sizeof(path), "logs/%s", dir->d_name);
+                DIR * subdir = opendir(path);
+                if(subdir) {
+                    struct dirent * subDirEntry;
+                    while((subDirEntry = readdir(subdir)) !=  NULL) {
+                        if(isLogFile(subDirEntry->d_name, original_file_name)) {
+                            snprintf(log_path, sizeof(log_path), "logs/%s/%s", dir->d_name, subDirEntry->d_name);
+                            printf("log_path: %s\n",log_path);
+                            int log_fd = open(log_path, O_RDONLY);
+                            if (log_fd == -1) {
+                                perror("Failed to open log file");
+                                return false;
+                            }
+                            applyMerge(merged_all_fd, log_fd);
+                            close(log_fd);
+                        }
+                    }
+                }
+                closedir(subdir);
+            }
+        }
+    }
+    closedir(d);
     return true;
 }
 
