@@ -95,7 +95,7 @@ bool ensure_directory_exists(const char* dir_path) {
 
 bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len, size_t region_size, char * file_name) {
     if (offset + len > region_size) {
-        //log_message(LOG_ERROR, "Write operation exceeds mapped region bounds.");
+        log_message(LOG_ERROR, "Write operation exceeds mapped region bounds.");
         return false;
     }
 
@@ -107,16 +107,21 @@ bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len,
         return false;
     }
 
+    // printf("log path: %s", file_name);
+
+    const char* original_file_name = strrchr(file_name, '/');
+    if (!original_file_name) original_file_name = file_name;
+    else original_file_name++;
+
+
     time_t now = time(NULL);
     char timestamp[64];
     strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", localtime(&now));
     char log_file_path[512];
-    snprintf(log_file_path, sizeof(log_file_path), "%s/log_%s_%s.log", log_dir_path, file_name, timestamp);
-
-    
+    snprintf(log_file_path, sizeof(log_file_path), "%s/log_%s_%s.log", log_dir_path, original_file_name, timestamp);
     int log_fd = open(log_file_path, O_WRONLY | O_CREAT | O_APPEND, 0666);
     if (log_fd == -1) {
-        //log_message(LOG_ERROR, "Failed to open log file: %s", strerror(errno));
+        log_message(LOG_ERROR, "Failed to open log file: %s", strerror(errno));
         return false;
     }
 
@@ -206,114 +211,29 @@ bool merge(const char* original_file_path, const char* log_file_path) {
     return true;
 }
 
-
-bool merge_all(const char* original_file_path) {
-    int original_fd = open(original_file_path, O_RDONLY);
-    if (original_fd == -1) {
-        perror("Failed to open original file");
-        return false;
-    }
-
-    const char* original_file_name = strrchr(original_file_path, '/');
-    if (!original_file_name) original_file_name = original_file_path;
-    else original_file_name++;
-
-    char merge_all_path[256];
-    snprintf(merge_all_path, sizeof(merge_all_path), "merge/merge_all_%s", original_file_name);
-
-    int merged_fd = open(merge_all_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (merged_fd == -1) {
-        perror("Failed to create merge_all file");
-        close(original_fd);
-        return false;
-    }
-
-    char buffer[1024];
-    ssize_t bytes_read;
-    while ((bytes_read = read(original_fd, buffer, sizeof(buffer))) > 0) {
-        if (write(merged_fd, buffer, bytes_read) != bytes_read) {
-            perror("Failed to write to merge_all file");
-            close(original_fd);
-            close(merged_fd);
-            return false;
-        }
-    }
-
-    close(original_fd); // Close the original file as its contents are fully copied
-
-    DIR *dir;
-    struct dirent *ent;
-    char log_folder_path[] = "logs/";
-    if ((dir = opendir(log_folder_path)) != NULL) {
-        while ((ent = readdir(dir)) != NULL) {
-            char* log_file_name = ent->d_name;
-            // Check if the log file name contains the original file name
-            if (strstr(log_file_name, original_file_name) != NULL) {
-                char log_file_path[256];
-                snprintf(log_file_path, sizeof(log_file_path), "%s%s", log_folder_path, log_file_name);
-
-                int log_fd = open(log_file_path, O_RDONLY);
-                if (log_fd == -1) {
-                    perror("Failed to open log file");
-                    continue; // Skip to next log file
-                }
-
-                // Apply merge between log file and merge_all file
-                char log_line[1024];
-                ssize_t read_size;
-                lseek(log_fd, 0, SEEK_SET);
-                while ((read_size = read(log_fd, log_line, sizeof(log_line) - 1)) > 0) {
-                    log_line[read_size] = '\0';
-                    char* ptr = log_line;
-                    while (ptr < log_line + read_size) {
-                        char* end_ptr = strchr(ptr, '\n');
-                        if (!end_ptr) break;
-                        *end_ptr = '\0';
-                        off_t offset;
-                        size_t len;
-                        char data[512];
-                        if (sscanf(ptr, "Offset: %ld, Length: %zu, Data: %[^\n]", &offset, &len, data) == 3) {
-                            lseek(merged_fd, offset, SEEK_SET);
-                            write(merged_fd, data, strlen(data));
-                        }
-                        ptr = end_ptr + 1;
-                    }
-                }
-                close(log_fd);
-            }
-        }
-        closedir(dir);
-    } else {
-        perror("Failed to open logs directory");
-    }
-
-    close(merged_fd); // Ensure the merged file is closed properly
-    return true; // Indicate successful completion
-}
-
 bool demo_read_write() {
     log_message(LOG_UPDATE, "Process %d started reading and write routine", getpid());
     int fd[NUMBER_OF_FILES];
     char file_name[FILE_NAME_SIZE];
     int i = 0;
     for(; i < NUMBER_OF_FILES; i++) {
-        snprintf(file_name, FILE_NAME_SIZE, "files/file_%d", i);
+        snprintf(file_name, FILE_NAME_SIZE, "files/file%d", i);
         fd[i] = open(file_name, O_RDONLY);
         
         if(fd[i] == -1) {
-            //log_message(LOG_ERROR, "file descriptor failed: %s", strerror(errno));
+            log_message(LOG_ERROR, "file descriptor failed: %s", strerror(errno));
             return false;
         }
 
         struct stat st;
         if(fstat(fd[i], &st) == -1) {
-            //log_message(LOG_ERROR, "fstat failed: %s", strerror(errno));
+            log_message(LOG_ERROR, "fstat failed: %s", strerror(errno));
             close(fd[i]);
             return false;
         }
         char * mapped_region = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd[i], 0);
         if(mapped_region == MAP_FAILED) {
-            //log_message(LOG_ERROR, "mmap failed: %s", strerror(errno));
+            log_message(LOG_ERROR, "mmap failed: %s", strerror(errno));
             close(fd[i]);
             return false;
         }
@@ -357,7 +277,7 @@ bool create_files() {
     // if(!check_directory()) return false;
     int i = 0;
     for(; i < NUMBER_OF_FILES; i++) {
-        snprintf(file_name, FILE_NAME_SIZE, "files/file_%d", i);
+        snprintf(file_name, FILE_NAME_SIZE, "files/file%d", i);
         fd = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, FILE_PERMISSIONS);
         if(fd == -1) {
             //log_message(LOG_ERROR, "open failed: %s", strerror(errno));
@@ -374,7 +294,7 @@ bool add_content_files() {
     int fd;
     // if(!check_directory()) return false;
     for(int i=0; i < NUMBER_OF_FILES; i++) {
-        snprintf(file_name, FILE_NAME_SIZE, "files/file_%d", i);
+        snprintf(file_name, FILE_NAME_SIZE, "files/file%d", i);
         fd = open(file_name, O_WRONLY, FILE_PERMISSIONS);
         if(fd == -1) {
             //log_message(LOG_ERROR, "open failed: %s", strerror(errno));
@@ -421,16 +341,16 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
 
     void *new_page = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (new_page == MAP_FAILED) {
-        //log_message(LOG_ERROR, "mmap failed: %s", strerror(errno));
+        log_message(LOG_ERROR, "mmap failed: %s", strerror(errno));
         _exit(EXIT_FAILURE);
     }
-    //log_message(LOG_INFO, "New page mapped at: %p\n", new_page);
+    log_message(LOG_INFO, "New page mapped at: %p\n", new_page);
 
     memcpy(new_page, fault_addr, PAGE_SIZE);
     //log_message(LOG_INFO, "Content copied to new page by process %d\n", getpid());
 
     if (mprotect(new_page, PAGE_SIZE, PROT_READ | PROT_WRITE) == -1) {
-        //log_message(LOG_ERROR, "mprotect failed: %s", strerror(errno));
+        log_message(LOG_ERROR, "mprotect failed: %s", strerror(errno));
         _exit(EXIT_FAILURE);
     }
 
@@ -460,7 +380,7 @@ bool setupSignalHandler() {
     sa.sa_flags = SA_SIGINFO;
 
     if(sigaction(SIGSEGV, &sa, NULL) == -1) {
-        //log_message(LOG_ERROR, "sigaction setup for SIGSEGV failed: %s", strerror(errno));
+        log_message(LOG_ERROR, "sigaction setup for SIGSEGV failed: %s", strerror(errno));
         return false;
     }
     log_message(LOG_UPDATE, "SIGSEGV Signal Handler updated");
