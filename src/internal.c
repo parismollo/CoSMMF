@@ -1,65 +1,51 @@
 #include "internal.h"
 
-void log_message(LogLevel level, const char* format, ...) {
-    va_list args;
-    va_start(args, format);
-
-    time_t now = time(NULL);
-    char* time_str = ctime(&now);
-    time_str[strlen(time_str) - 1] = '\0';
-
-    const char* color_red = "\033[1;31m";
-    const char* color_blue = "\033[1;34m";
-    const char* color_yellow = "\033[1;33m";
-    const char* color_green = "\033[1;32m";
-    const char* color_reset = "\033[0m";
-
-    const char* level_strs[] = {"INFO", "END", "DEBUG", "UPDATE"};
-    const char* level_colors[] = {color_blue, color_red, color_yellow, color_green};
-
-    printf("%s[%s] [%s]%s ", level_colors[level], time_str, level_strs[level], color_reset);
-    vprintf(format, args);
-    printf("\n");
-
-    va_end(args);
-}
-
-
-bool launch_processes() {
+/*
+This function will create NUMBER OF PROCESSES and each
+child process will attempt to write on a read only file
+*/
+bool start_file_write_processes() {
     ptedit_init();
     int pids[NUMBER_OF_PROCESSES];
+    int num_started = 0;
+    bool all_success = true;
     for(int i=0; i < NUMBER_OF_PROCESSES; i++) {
         pids[i] = fork();
         if(pids[i] < 0) {
             log_message(LOG_ERROR, "fork failed: %s", strerror(errno));
-            return false;
+            all_success = false; 
+            break;
         } else if (pids[i] == 0) {
-            log_message(LOG_UPDATE, "Process %d created", getpid());
-            if(!demo_read_write()){
+            // log_message(LOG_UPDATE, "Process %d created", getpid());
+            if(!perform_file_modifications()){
                 log_message(LOG_ERROR, "write failed: %s", strerror(errno)); 
                 exit(EXIT_FAILURE);
 
             }
             exit(EXIT_SUCCESS);
+        }else {
+            num_started++;
         }
     }
 
-    int status;
-    for(int i=0; i < NUMBER_OF_PROCESSES; i++) {
-        waitpid(pids[i], &status, 0);
-        if(WIFEXITED(status)) {
-            log_message(LOG_INFO, "Child process %d returned with status %d\n", pids[i], WEXITSTATUS(status));
-        } else if(WIFSIGNALED(status)) {
-            log_message(LOG_INFO,"Child process %d was terminated by a signal %d - ", pids[i], WTERMSIG(status));
-            if(WTERMSIG(status) == SIGSEGV) {
-                log_message(LOG_INFO, "That was due a segmentation fault\n");
+    if(!all_success) {
+        for(int j = 0; j < num_started; j++) {
+            kill(pids[j], SIGTERM);
+            waitpid(pids[j], NULL, 0);
+        }
+    } else {
+        int status;
+        for(int i=0; i < NUMBER_OF_PROCESSES; i++) {
+            waitpid(pids[i], &status, 0);
+            if(!WIFEXITED(status) || WEXITSTATUS(status) != EXIT_SUCCESS) {
+                log_message(LOG_ERROR, "Child process %d did not exit successfully", pids[i]);
+                all_success = false;
             }
         }
     }
 
-    log_message(LOG_INFO, "All child processes have finished\n");
     ptedit_cleanup();
-    return true;
+    return all_success;
 }
 
 bool ensure_directory_exists(const char* dir_path) {
@@ -73,7 +59,11 @@ bool ensure_directory_exists(const char* dir_path) {
     return true;
 }
 
-bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len, size_t region_size, char * file_name) {
+/*
+This function will write to a log file the modification to the file. The write will occur on a 
+new write authorized mapped memory region.
+*/
+bool log_and_write_memory_region(char *mapped_region, off_t offset, const char *data, size_t len, size_t region_size, char * file_name) {
     if (offset + len > region_size) {
         log_message(LOG_ERROR, "Write operation exceeds mapped region bounds.");
         return false;
@@ -110,7 +100,7 @@ bool psar_write(char *mapped_region, off_t offset, const char *data, size_t len,
     close(log_fd);
 
     memcpy(mapped_region + offset, data, len);
-    log_message(LOG_UPDATE, "Process %d logged %s", getpid(), log_file_path);
+    // log_message(LOG_UPDATE, "Process %d logged %s", getpid(), log_file_path);
     return true;
 }
 
@@ -291,8 +281,14 @@ bool merge_all(char * source_file_path) {
     return true;
 }
 
-bool demo_read_write() {
-    log_message(LOG_UPDATE, "Process %d started reading and write routine", getpid());
+/*
+
+This function will attempt a non authorized write to every read only file available at files folder
+after mapping the file to read only memory.
+
+*/
+bool perform_file_modifications() {
+    // log_message(LOG_UPDATE, "Process %d started reading and write routine", getpid());
     int fd[NUMBER_OF_FILES];
     char file_name[FILE_NAME_SIZE];
     int i = 0;
@@ -317,23 +313,24 @@ bool demo_read_write() {
             close(fd[i]);
             return false;
         }
-        
-        psar_write(mapped_region, WRITE_OFFSET, WRITE_DEMO, strlen(WRITE_DEMO), st.st_size, file_name);
+        // log_message(LOG_DEBUG, "File size: %zu, Write offset: %d, Data length: %zu", st.st_size, WRITE_OFFSET, strlen(WRITE_DEMO));
+        log_and_write_memory_region(mapped_region, WRITE_OFFSET, WRITE_DEMO, strlen(WRITE_DEMO), st.st_size, file_name);
         munmap(mapped_region, st.st_size);
         close(fd[i]);
     }
-    log_message(LOG_UPDATE, "Process %d modified %d files", getpid(), i);
+    // log_message(LOG_UPDATE, "Process %d modified %d files", getpid(), i);
     return true;
 }
 
-void setup() {
-    ensure_directories_exist();
-    create_files();
-    add_content_files();
-    setupSignalHandler();
+void initialize_project_environment() {
+    /*This function will set up the project folder so that we can test the tool pteditor*/
+    create_required_directories();
+    create_initial_project_files();
+    write_initial_data_to_files();
+    configure_signal_handlers();
 }
 
-void ensure_directories_exist() {
+void create_required_directories() {
     const char* directories[] = {"logs", "merge", "files"};
     size_t num_directories = sizeof(directories) / sizeof(directories[0]);
     for (size_t i = 0; i < num_directories; ++i) {
@@ -344,10 +341,10 @@ void ensure_directories_exist() {
             }
         }
     }
-    log_message(LOG_UPDATE, "Folders log, merge and files created");
+    // log_message(LOG_UPDATE, "Folders log, merge and files created");
 }
 
-bool create_files() {
+bool create_initial_project_files() {
     char file_name[FILE_NAME_SIZE];
     int fd;
     int i = 0;
@@ -360,11 +357,11 @@ bool create_files() {
         }
         close(fd);
     }
-    log_message(LOG_UPDATE, "%d files were created", i);
+    // log_message(LOG_UPDATE, "%d files were created", i);
     return true;
 }
 
-bool add_content_files() {
+bool write_initial_data_to_files() {
     char file_name[FILE_NAME_SIZE];
     int fd;
     for(int i=0; i < NUMBER_OF_FILES; i++) {
@@ -381,17 +378,7 @@ bool add_content_files() {
         }
         close(fd);
     }
-    log_message(LOG_UPDATE, "Data written to files");
-    return true;
-}
-
-bool check_directory() {
-    if(mkdir(TEST_FILE_FOLDER, 0755)) {
-        if(errno != EEXIST) {
-            log_message(LOG_ERROR, "mkdir failed: %s", strerror(errno));
-            return false;
-        }
-    }
+    // log_message(LOG_UPDATE, "Data written to files");
     return true;
 }
 
@@ -405,8 +392,12 @@ void* align_to_page_boundary(void* address) {
     return (void*)((size_t)address & ~(PAGE_SIZE - 1));
 }
 
+/*
+This function will update the PFN of the virtual address of where the segmentation fault occured
+It will then point to a valid write/read mapped memory region where we will write the modifications.
+*/
 void signalHandler(int sig, siginfo_t * si, void * unused) {
-    log_message(LOG_INFO, "Handler caught SIGSEGV - write attempt by process %d\n", getpid());
+    // log_message(LOG_INFO, "Handler caught SIGSEGV - write attempt by process %d\n", getpid());
     void * fault_addr = si->si_addr;
     fault_addr = align_to_page_boundary(fault_addr);
     //log_message(LOG_INFO, "Faulting address (aligned): %p\n", fault_addr);
@@ -416,7 +407,7 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
         log_message(LOG_ERROR, "mmap failed: %s", strerror(errno));
         _exit(EXIT_FAILURE);
     }
-    log_message(LOG_INFO, "New page mapped at: %p\n", new_page);
+    // log_message(LOG_INFO, "New page mapped at: %p\n", new_page);
 
     memcpy(new_page, fault_addr, PAGE_SIZE);
     //log_message(LOG_INFO, "Content copied to new page by process %d\n", getpid());
@@ -441,10 +432,10 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
 
     ptedit_invalidate_tlb(fault_addr);
 
-    log_message(LOG_UPDATE, "Process %d updated virtual address %p to new physical address %zu", getpid(), fault_addr, (new_page_entry.pte));
+    // log_message(LOG_UPDATE, "Process %d updated virtual address %p to new physical address %zu", getpid(), fault_addr, (new_page_entry.pte));
 }
 
-bool setupSignalHandler() {
+bool configure_signal_handlers() {
     struct sigaction sa;
     sigemptyset(&sa.sa_mask); 
     sa.sa_sigaction = signalHandler;
@@ -454,7 +445,7 @@ bool setupSignalHandler() {
         log_message(LOG_ERROR, "sigaction setup for SIGSEGV failed: %s", strerror(errno));
         return false;
     }
-    log_message(LOG_UPDATE, "SIGSEGV Signal Handler updated");
+    // log_message(LOG_UPDATE, "SIGSEGV Signal Handler updated");
     return true;
 }
 
@@ -462,4 +453,28 @@ void show_diff(const char *file1, const char *file2) {
     char command[256];
     snprintf(command, sizeof(command), "diff %s %s", file1, file2);
     system(command);
+}
+
+void log_message(LogLevel level, const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    time_t now = time(NULL);
+    char* time_str = ctime(&now);
+    time_str[strlen(time_str) - 1] = '\0';
+
+    const char* color_red = "\033[1;31m";
+    const char* color_blue = "\033[1;34m";
+    const char* color_yellow = "\033[1;33m";
+    const char* color_green = "\033[1;32m";
+    const char* color_reset = "\033[0m";
+
+    const char* level_strs[] = {"INFO", "END", "DEBUG", "UPDATE"};
+    const char* level_colors[] = {color_blue, color_red, color_yellow, color_green};
+
+    printf("%s[%s] [%s]%s ", level_colors[level], time_str, level_strs[level], color_reset);
+    vprintf(format, args);
+    printf("\n");
+
+    va_end(args);
 }
