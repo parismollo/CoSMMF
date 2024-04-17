@@ -3,17 +3,27 @@
 CC=gcc 
 CFLAGS=-I./include
 
-run_test:
-	@make internal_tests --no-print-directory
-	@./internal_tests
+# Name of the executable
+EXEC=psar
 
-internal_tests: src/internal.c tests/internal_tests.c
+# Source files
+SRC=$(wildcard src/*.c app/*.c)
+OBJS=$(SRC:.c=.o)
+
+# Default build target
+all: $(EXEC)
+
+$(EXEC): $(OBJS)
+	@echo "Building $@"
 	@$(CC) $(CFLAGS) $^ -o $@
+	@echo "Build complete"
 
 clean:
-	@rm -f internal_tests
+	@echo "Cleaning up"
+	@rm -f $(OBJS) $(EXEC)
 	@rm -f files/*
 	@rm -rf logs/*
 	@rm -rf merge/*
-	
+	@echo "Clean complete"
 
+.PHONY: all clean
