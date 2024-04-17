@@ -104,29 +104,28 @@ bool log_and_write_memory_region(char *mapped_region, off_t offset, const char *
     return true;
 }
 
+/*
+Function will copy original file contents, and write a new updated 
+version else where based off the log information
+*/
 bool merge(const char* original_file_path, const char* log_file_path) {
     int original_fd = open(original_file_path, O_RDONLY);
     if (original_fd == -1) {
-        perror("Failed to open original file");
+        log_message(LOG_ERROR, "Failed to open original file: %s", strerror(errno));
         return false;
     }
 
     int log_fd = open(log_file_path, O_RDONLY);
     if (log_fd == -1) {
-        perror("Failed to open log file");
+        log_message(LOG_ERROR, "Failed to open log file: %s", strerror(errno));
         close(original_fd);
         return false;
     }
 
-    char merged_file_path[512];
-    const char* original_file_name = strrchr(original_file_path, '/');
-    if (!original_file_name) original_file_name = original_file_path;
-    else original_file_name++;
-    const char* log_file_name = strrchr(log_file_path, '/');
-    if (!log_file_name) log_file_name = log_file_path;
-    else log_file_name++;
+    char merged_file_path[512], merge_dir_path[256];
+    const char* original_file_name = strrchr(original_file_path, '/') ? strrchr(original_file_path, '/') + 1 : original_file_path;
+    const char* log_file_name = strrchr(log_file_path, '/') ? strrchr(log_file_path, '/') + 1 : log_file_path;
 
-    char merge_dir_path[256];
     snprintf(merge_dir_path, sizeof(merge_dir_path), "merge/merge_%s", original_file_name);
     if (!ensure_directory_exists(merge_dir_path)) {
         close(original_fd);
@@ -138,7 +137,7 @@ bool merge(const char* original_file_path, const char* log_file_path) {
 
     int merged_fd = open(merged_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (merged_fd == -1) {
-        perror("Failed to create merged file");
+        log_message(LOG_ERROR, "Failed to create merged file: %s", strerror(errno));
         close(original_fd);
         close(log_fd);
         return false;
@@ -147,34 +146,21 @@ bool merge(const char* original_file_path, const char* log_file_path) {
     char buffer[1024];
     ssize_t bytes_read;
     while ((bytes_read = read(original_fd, buffer, sizeof(buffer))) > 0) {
-        write(merged_fd, buffer, bytes_read);
-    }
-
-    char log_line[1024];
-    ssize_t read_size;
-    lseek(log_fd, 0, SEEK_SET);
-    while ((read_size = read(log_fd, log_line, sizeof(log_line) - 1)) > 0) {
-        log_line[read_size] = '\0';
-        char* ptr = log_line;
-        while (ptr < log_line + read_size) {
-            char* end_ptr = strchr(ptr, '\n');
-            if (!end_ptr) break;
-            *end_ptr = '\0';
-            off_t offset;
-            size_t len;
-            char data[512];
-            if (sscanf(ptr, "Offset: %ld, Length: %zu, Data: %[^\n]", &offset, &len, data) == 3) {
-                lseek(merged_fd, offset, SEEK_SET);
-                write(merged_fd, data, strlen(data));
-            }
-            ptr = end_ptr + 1;
+        if (write(merged_fd, buffer, bytes_read) != bytes_read) {
+            log_message(LOG_ERROR, "Failed to write all bytes to merged file");
+            close(original_fd);
+            close(log_fd);
+            close(merged_fd);
+            return false;
         }
     }
+
+    applyMerge(merged_fd, log_fd);
 
     close(original_fd);
     close(log_fd);
     close(merged_fd);
-    log_message(LOG_UPDATE, "merge created for file %s", original_file_name);
+    // log_message(LOG_UPDATE, "merge created for file %s", original_file_name);
     return true;
 }
 
@@ -201,6 +187,10 @@ void applyMerge(int to_fd, int from_fd) {
     }
 }
 
+/*
+This function will check if filename
+is a log type of file and if it is from target
+*/
 bool isLogFile(const char *filename, const char *target) {
     const char *dot = strrchr(filename, '.');
     if (!dot || strcmp(dot, ".log") != 0) {
@@ -220,7 +210,11 @@ bool isLogFile(const char *filename, const char *target) {
 
     return false;
 }
-
+/*
+Function loop over every log folder inside logs and apply merge
+for all log files corresponding to that source file
+- incremental file updating
+*/
 bool merge_all(char * source_file_path) {
     int source_file_fd = open(source_file_path, O_RDONLY);
     if (source_file_fd == -1) {

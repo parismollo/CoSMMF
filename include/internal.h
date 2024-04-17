@@ -28,7 +28,7 @@
 #define PAGE_SIZE 4096
 #define DATA_DEMO "------------ Hello World! ------------"
 #define WRITE_DEMO "xxx"
-#define WRITE_OFFSET 10
+#define WRITE_OFFSET 15
 
 typedef enum { LOG_INFO, LOG_ERROR, LOG_DEBUG, LOG_UPDATE } LogLevel;
 
@@ -50,4 +50,6 @@ void create_required_directories();
 void show_diff(const char *file1, const char *file2);
 bool merge_all(char * source_file_path);
 bool isLogFile(const char *filename, const char *target);
+void applyMerge(int to_fd, int from_fd);
+
 #endif
