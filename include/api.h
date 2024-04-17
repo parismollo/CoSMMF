@@ -37,7 +37,7 @@ bool create_initial_project_files();
 bool start_file_write_processes();
 bool write_initial_data_to_files();
 bool perform_file_modifications();
-void signalHandler(int sig, siginfo_t * si, void * unused);
+void signal_handler(int sig, siginfo_t * si, void * unused);
 bool configure_signal_handlers();
 void log_message(LogLevel level, const char* format, ...);
 void log_virtual_to_physical(void* address);
@@ -49,7 +49,7 @@ void initialize_project_environment();
 void create_required_directories();
 void show_diff(const char *file1, const char *file2);
 bool merge_all(char * source_file_path);
-bool isLogFile(const char *filename, const char *target);
-void applyMerge(int to_fd, int from_fd);
+bool is_log_file(const char *filename, const char *target);
+void apply_merge(int to_fd, int from_fd);
 
 #endif

@@ -156,7 +156,7 @@ bool merge(const char* original_file_path, const char* log_file_path) {
         }
     }
 
-    applyMerge(merged_fd, log_fd);
+    apply_merge(merged_fd, log_fd);
 
     close(original_fd);
     close(log_fd);
@@ -165,7 +165,7 @@ bool merge(const char* original_file_path, const char* log_file_path) {
     return true;
 }
 
-void applyMerge(int to_fd, int from_fd) {
+void apply_merge(int to_fd, int from_fd) {
     char log_line[1024];
     ssize_t read_size;
     lseek(from_fd, 0, SEEK_SET);
@@ -192,7 +192,7 @@ void applyMerge(int to_fd, int from_fd) {
 This function will check if filename
 is a log type of file and if it is from target
 */
-bool isLogFile(const char *filename, const char *target) {
+bool is_log_file(const char *filename, const char *target) {
     const char *dot = strrchr(filename, '.');
     if (!dot || strcmp(dot, ".log") != 0) {
         return false;
@@ -255,7 +255,7 @@ bool merge_all(char * source_file_path) {
                 if(subdir) {
                     struct dirent * subDirEntry;
                     while((subDirEntry = readdir(subdir)) !=  NULL) {
-                        if(isLogFile(subDirEntry->d_name, original_file_name)) {
+                        if(is_log_file(subDirEntry->d_name, original_file_name)) {
                             snprintf(log_path, sizeof(log_path), "logs/%s/%s", dir->d_name, subDirEntry->d_name);
                             printf("log_path: %s\n",log_path);
                             int log_fd = open(log_path, O_RDONLY);
@@ -263,7 +263,7 @@ bool merge_all(char * source_file_path) {
                                 perror("Failed to open log file");
                                 return false;
                             }
-                            applyMerge(merged_all_fd, log_fd);
+                            apply_merge(merged_all_fd, log_fd);
                             close(log_fd);
                         }
                     }
@@ -391,7 +391,7 @@ void* align_to_page_boundary(void* address) {
 This function will update the PFN of the virtual address of where the segmentation fault occured
 It will then point to a valid write/read mapped memory region where we will write the modifications.
 */
-void signalHandler(int sig, siginfo_t * si, void * unused) {
+void signal_handler(int sig, siginfo_t * si, void * unused) {
     // log_message(LOG_INFO, "Handler caught SIGSEGV - write attempt by process %d\n", getpid());
     void * fault_addr = si->si_addr;
     fault_addr = align_to_page_boundary(fault_addr);
@@ -433,7 +433,7 @@ void signalHandler(int sig, siginfo_t * si, void * unused) {
 bool configure_signal_handlers() {
     struct sigaction sa;
     sigemptyset(&sa.sa_mask); 
-    sa.sa_sigaction = signalHandler;
+    sa.sa_sigaction = signal_handler;
     sa.sa_flags = SA_SIGINFO;
 
     if(sigaction(SIGSEGV, &sa, NULL) == -1) {
