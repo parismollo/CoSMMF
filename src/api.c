@@ -390,6 +390,7 @@ void* align_to_page_boundary(void* address) {
 /*
 This function will update the PFN of the virtual address of where the segmentation fault occured
 It will then point to a valid write/read mapped memory region where we will write the modifications.
+Reminder: Page Frame Number (PFN) is an index into the physical memory of a computer
 */
 void signal_handler(int sig, siginfo_t * si, void * unused) {
     // log_message(LOG_INFO, "Handler caught SIGSEGV - write attempt by process %d\n", getpid());
