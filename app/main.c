@@ -3,6 +3,11 @@
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <command> [options]\n", argv[0]);
+        fprintf(stderr, "Commands:\n");
+        fprintf(stderr, "  init                     Initialize the project environment with necessary setup.\n");
+        fprintf(stderr, "  test                     Start the file write processes for testing.\n");
+        fprintf(stderr, "  merge -s [source_file] -l [log_file]  Merge changes from a log file into the specified source file.\n");
+        fprintf(stderr, "  merge_all -s [source_file]  Apply all accumulated log modifications to the specified source file.\n");
         return 1;
     }
 

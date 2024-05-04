@@ -243,12 +243,50 @@ To build the project, run `make`. To remove compiled files and clean the project
 Once the project has been compiled, you will find the executable `psar` in the project directory.
 
 * `./psar init`: Initializes the project environment.
-* `./psar test`: Starts the file writing processes for testing. See variables `DATA_DEMO`, `WRITE_DEMO` and `WRITE_OFFSET` in `api.h` for testing different scenarios. Once this commmand finishes, see the `logs/` folder for the results.
+* `./psar test`: Starts the file writing processes for testing. See variables `NUMBER_OF_FILES`, `NUMBER_OF_PROCESSES`, `DATA_DEMO`, `WRITE_DEMO` and `WRITE_OFFSET` in `api.h` for testing different scenarios. Once this commmand finishes, see the `logs/` folder for the results.
 * `./psar merge -s [source_file] -l [log_file]`: Merges a source file with its corresponding log file. Once this commmand finishes, see the `merge/` folder for the results.
 * `./psar merge_all -s [source_file]`: Merges all logs associated with a source file. Once this commmand finishes, see the `merge/` folder for the results.
 
 ### Demo
-*Todo*
+```
+paris@paris-pc:~/SAR/PSAR/PSAR$ lsmod | grep pteditor
+pteditor               24576  0
+paris@paris-pc:~/SAR/PSAR/PSAR$ make
+Building psar
+Build complete
+paris@paris-pc:~/SAR/PSAR/PSAR$ ./psar
+Usage: ./psar <command> [options]
+Commands:
+  init                     Initialize the project environment with necessary setup.
+  test                     Start the file write processes for testing.
+  merge -s [source_file] -l [log_file]  Merge changes from a log file into the specified source file.
+  merge_all -s [source_file]  Apply all accumulated log modifications to the specified source file.
+paris@paris-pc:~/SAR/PSAR/PSAR$ ./psar init
+[Sun May  5 00:39:06 2024] [UPDATE] Folders log, merge and files created
+[Sun May  5 00:39:06 2024] [UPDATE] 1 files were created
+[Sun May  5 00:39:06 2024] [UPDATE] Data written to test files
+[Sun May  5 00:39:06 2024] [UPDATE] SIGSEGV Signal Handler updated
+paris@paris-pc:~/SAR/PSAR/PSAR$ ls files/
+file0
+paris@paris-pc:~/SAR/PSAR/PSAR$ cat files/file0
+------------ Hello World! ------------
+paris@paris-pc:~/SAR/PSAR/PSAR$ ./psar test
+[Sun May  5 00:39:32 2024] [UPDATE] SIGSEGV Signal Handler updated
+[Sun May  5 00:39:32 2024] [UPDATE] Process 14001 created
+[Sun May  5 00:39:32 2024] [UPDATE] Process 14001 started reading and write routine
+[Sun May  5 00:39:32 2024] [INFO] Handler caught SIGSEGV - write attempt by process 14001
+
+[Sun May  5 00:39:32 2024] [UPDATE] Process 14001 updated virtual address 0x7f766dd51000 to new physical address 9223372041640208487
+[Sun May  5 00:39:32 2024] [UPDATE] Process 14001 modified 1 files
+paris@paris-pc:~/SAR/PSAR/PSAR$ ls logs/logs_14001/
+log_file0_20240505_003932.log
+paris@paris-pc:~/SAR/PSAR/PSAR$ cat logs/logs_14001/log_file0_20240505_003932.log 
+Offset: 15, Length: 3, Data: xxx
+paris@paris-pc:~/SAR/PSAR/PSAR$ ./psar merge -s files/file0 -l logs/logs_14001/log_file0_20240505_003932.log 
+[Sun May  5 00:40:26 2024] [UPDATE] merge created for file file0
+paris@paris-pc:~/SAR/PSAR/PSAR$ cat merge/merge_file0/file0_log_file0_20240505_003932.log 
+------------ Hexxx World! ------------ 
+```
 
 ## Conclusion
 The project demonstrates how to handle concurrent file access through memory mapping by implementing a copy-on-write system. This approach ensures that the integrity of data is maintained across multiple processes, therefore solving the issue of data consistency in a shared memory environment.

@@ -17,7 +17,7 @@ bool start_file_write_processes() {
             all_success = false; 
             break;
         } else if (pids[i] == 0) {
-            // log_message(LOG_UPDATE, "Process %d created", getpid());
+            log_message(LOG_UPDATE, "Process %d created", getpid());
             if(!perform_file_modifications()){
                 log_message(LOG_ERROR, "write failed: %s", strerror(errno)); 
                 exit(EXIT_FAILURE);
@@ -161,7 +161,7 @@ bool merge(const char* original_file_path, const char* log_file_path) {
     close(original_fd);
     close(log_fd);
     close(merged_fd);
-    // log_message(LOG_UPDATE, "merge created for file %s", original_file_name);
+    log_message(LOG_UPDATE, "merge created for file %s", original_file_name);
     return true;
 }
 
@@ -257,7 +257,6 @@ bool merge_all(char * source_file_path) {
                     while((subDirEntry = readdir(subdir)) !=  NULL) {
                         if(is_log_file(subDirEntry->d_name, original_file_name)) {
                             snprintf(log_path, sizeof(log_path), "logs/%s/%s", dir->d_name, subDirEntry->d_name);
-                            printf("log_path: %s\n",log_path);
                             int log_fd = open(log_path, O_RDONLY);
                             if (log_fd == -1) {
                                 perror("Failed to open log file");
@@ -273,6 +272,7 @@ bool merge_all(char * source_file_path) {
         }
     }
     closedir(d);
+    log_message(LOG_UPDATE, "merge_all created for file %s", source_file_path);
     return true;
 }
 
@@ -283,7 +283,7 @@ after mapping the file to read only memory.
 
 */
 bool perform_file_modifications() {
-    // log_message(LOG_UPDATE, "Process %d started reading and write routine", getpid());
+    log_message(LOG_UPDATE, "Process %d started reading and write routine", getpid());
     int fd[NUMBER_OF_FILES];
     char file_name[FILE_NAME_SIZE];
     int i = 0;
@@ -313,7 +313,7 @@ bool perform_file_modifications() {
         munmap(mapped_region, st.st_size);
         close(fd[i]);
     }
-    // log_message(LOG_UPDATE, "Process %d modified %d files", getpid(), i);
+    log_message(LOG_UPDATE, "Process %d modified %d files", getpid(), i);
     return true;
 }
 
@@ -336,7 +336,7 @@ void create_required_directories() {
             }
         }
     }
-    // log_message(LOG_UPDATE, "Folders log, merge and files created");
+    log_message(LOG_UPDATE, "Folders log, merge and files created");
 }
 
 bool create_initial_project_files() {
@@ -352,7 +352,7 @@ bool create_initial_project_files() {
         }
         close(fd);
     }
-    // log_message(LOG_UPDATE, "%d files were created", i);
+    log_message(LOG_UPDATE, "%d files were created", i);
     return true;
 }
 
@@ -373,7 +373,7 @@ bool write_initial_data_to_files() {
         }
         close(fd);
     }
-    // log_message(LOG_UPDATE, "Data written to files");
+    log_message(LOG_UPDATE, "Data written to test files");
     return true;
 }
 
@@ -393,7 +393,7 @@ It will then point to a valid write/read mapped memory region where we will writ
 Reminder: Page Frame Number (PFN) is an index into the physical memory of a computer
 */
 void signal_handler(int sig, siginfo_t * si, void * unused) {
-    // log_message(LOG_INFO, "Handler caught SIGSEGV - write attempt by process %d\n", getpid());
+    log_message(LOG_INFO, "Handler caught SIGSEGV - write attempt by process %d\n", getpid());
     void * fault_addr = si->si_addr;
     fault_addr = align_to_page_boundary(fault_addr);
     //log_message(LOG_INFO, "Faulting address (aligned): %p\n", fault_addr);
@@ -428,7 +428,7 @@ void signal_handler(int sig, siginfo_t * si, void * unused) {
 
     ptedit_invalidate_tlb(fault_addr);
 
-    // log_message(LOG_UPDATE, "Process %d updated virtual address %p to new physical address %zu", getpid(), fault_addr, (new_page_entry.pte));
+    log_message(LOG_UPDATE, "Process %d updated virtual address %p to new physical address %zu", getpid(), fault_addr, (new_page_entry.pte));
 }
 
 bool configure_signal_handlers() {
@@ -441,7 +441,7 @@ bool configure_signal_handlers() {
         log_message(LOG_ERROR, "sigaction setup for SIGSEGV failed: %s", strerror(errno));
         return false;
     }
-    // log_message(LOG_UPDATE, "SIGSEGV Signal Handler updated");
+    log_message(LOG_UPDATE, "SIGSEGV Signal Handler updated");
     return true;
 }
 
