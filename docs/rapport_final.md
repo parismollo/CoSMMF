@@ -11,7 +11,6 @@
   - [Project Setup and Structure](#project-setup-and-structure)
   - [Core functions and Their implementations](#core-functions-and-their-implementations)
     - [Execution Flow](#execution-flow)
-  - [Perfomances](#perfomances)
   - [Compilation and Execution](#compilation-and-execution)
     - [Makefile](#makefile)
     - [Running the program](#running-the-program)
@@ -47,7 +46,7 @@ if (fstat(fd, &fileInfo) == -1) {
 }
 char *mappedData = mmap(NULL, fileInfo.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 ```
-![Example of a mapped file](/docs/example_mapped_file.png)
+![Example of a mapped file](example_mapped_file.png)
 ### I/O Operations
 Traditional I/O operations involve system calls that require transitioning from user space to kernel space, known as context switching. This can make randomly accessing various parts of a file less efficient, as each access may require disk seeking and potentially multiple disk reads and system calls.
 
@@ -78,7 +77,7 @@ To address the challenge of concurrent modifications to a memory-mapped file wit
 
 This solution ensures data integrity and isolation between processes, allowing for efficient concurrent operations on shared files with minimal risk of conflicts.
 
-![Solution example](/docs/example_solution.png)
+![Solution example](example_solution.png)
 
 ## Project Setup and Structure
 ```bash
@@ -194,10 +193,7 @@ bool merge_all(char * source_file_path);
 9. For each opened log file, the function calls `apply_merge`, passing the file descriptor of the merged file and the log file. This function will apply the changes recorded in the log file to the merged file. Closes each log file descriptor after processing.
 
 ### Execution Flow
-![Execution flow](/docs/execution_flow_diagram.png)
-
-## Perfomances
-*Todo*
+![Execution flow](execution_flow_diagram.png)
 
 ## Compilation and Execution
 
