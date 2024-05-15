@@ -1,4 +1,4 @@
-# suppresses command echo - no prints to the terminal
+# no prints to the terminal
 .SILENT: 
 
 CC=gcc # compiler
@@ -7,11 +7,11 @@ CFLAGS=-I./include # tells compiler to include the include folder during header 
 # Name of the executable
 EXEC=psar
 
-# Source files - find all .c files
+# Source files
 SRC=$(wildcard src/*.c app/*.c)
 OBJS=$(SRC:.c=.o)
 
-# Default build target
+# build target
 all: $(EXEC)
 
 $(EXEC): $(OBJS)
@@ -26,5 +26,6 @@ clean:
 	@rm -rf logs/*
 	@rm -rf merge/*
 	@echo "Clean complete"
-# avoid confusion if files were named like this
+
+# in case if files were named like all or clean.
 .PHONY: all clean

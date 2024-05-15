@@ -30,7 +30,6 @@
 Pierre Sens - pierre.sens@lip6.fr
 
 ## Introduction
-
 Memory mapping is a feature in operating systems that enables files stored on disk to be projected into virtual memory. This projection facilitates file manipulation by making its contents directly accessible as if they were in RAM, therefore accelerating both read and write operations through **direct memory address manipulation**.
 
 ### Memory Mapped File Example
@@ -64,6 +63,8 @@ int bytes_read = read(fd, buffer, fileSize)
 
 ### Goal of the Project
 The goal of this project is to improve the use of shared memory mapping. When multiple processes access a memory-mapped file, they can view and modify the same content. If these processes write to a file mapped with `MAP_SHARED`, their modifications are visible to all, leading to conflicts or inconsistencies. This project's goal is to enable each process to write to a shared memory without altering the common file, therefore preventing conflicts that could impact other processes also using that file.
+
+![goal from original project description](goal_project.png)
 
 
 ## Proposed Solution
@@ -116,9 +117,9 @@ bool start_file_write_processes();
 ```
 1. This function initializes signal handlers and the PTeditor API. 
 2. It attempts to create a specified number of child processes (`NUMBER_OF_PROCESSES`). Each child is tasked with performing file modifications through the `perform_file_modifications` function. 
-3. If a child process fails to start (i.e., fork returns a negative value), an error is logged, and the all_success flag is set to false. If the child starts successfully but fails during file modification, it logs an error and exits with `EXIT_FAILURE`. If any child process creation fails, the parent terminates all successfully started children and exits the loop early. 
-4. If all child processes are created and complete their tasks successfully, the parent checks their exit statuses to ensure each child exited successfully. Any failure updates all_success to false. 
-5. After managing the child processes, the function performs a cleanup using the ptedit_cleanup API and returns the all_success status.
+3. If a child process fails to start (i.e., fork returns a negative value), an error is logged, and the `all_success` flag is set to false. If the child starts successfully but fails during file modification, it logs an error and exits with `EXIT_FAILURE`. If any child process creation fails, the parent terminates all successfully started children and exits the loop early. 
+4. If all child processes are created and complete their tasks successfully, the parent checks their exit statuses to ensure each child exited successfully. Any failure updates `all_success` to false. 
+5. After managing the child processes, the function performs a cleanup using the ptedit_cleanup API and returns the `all_success` status.
 
 ```c
 bool log_and_write_memory_region(char *mapped_region, off_t offset, const char *data, size_t len, size_t region_size, char * file_name);
@@ -165,7 +166,7 @@ void signal_handler(int sig, siginfo_t * si, void * unused);
 5. Retrieves the page table entries for both the faulting address and the new page using `ptedit_resolve`. This function is part of the ptedit library, which allows direct editing of page tables.
 6. Identifies the specific page table entry in the page table that needs to be modified. It does this by mapping the physical frame of the page table to a virtual address (ptedit_pmap), then calculating the index within the page table for the faulting address.
 7. Updates the PFN in the page table entry to point to the physical frame of the new page. This update is made using ptedit_set_pfn, which modifies the PFN in a page table entry.
-8. Updates the page table entry for the faulting address to reflect the new mapping using ptedit_update. This effectively changes the mapping so that future accesses to the faulting address will refer to the new page.
+8. Updates the page table entry for the faulting address to reflect the new mapping using ptedit_update. This changes the mapping so that future accesses to the faulting address will refer to the new page.
 9. Invalidates the TLB entry for the faulting address using ptedit_invalidate_tlb to ensure that the processor does not use outdated translations.
 
 ```c
@@ -174,7 +175,7 @@ void apply_merge(int to_fd, int from_fd);
 1. The function starts by setting the read position of the log file descriptor `(from_fd)` to the beginning of the file using `lseek(from_fd, 0, SEEK_SET)`. This ensures the changes are read from the start of the log.
 2. The function enters a loop where it reads up to 1023 bytes from the log file into the log_line buffer. It leaves space for a null terminator to safely convert the buffer into a string.
 3. After reading a chunk of data, the function null-terminates the buffer by setting `log_line[read_size] = '\0'`. It initializes a pointer ptr to the start of log_line and iterates through the buffer until it reaches the end of the read data.
-4. Inside the loop, the function searches for newline characters (\n) using `strchr(ptr, '\n')` to identify individual log entries. If no newline is found (end_ptr is NULL), the loop breaks because it has reached the end of the current read buffer. It then sets the found newline character to a null terminator `(*end_ptr = '\0')`, effectively isolating a single log entry as a string.
+4. Inside the loop, the function searches for newline characters (\n) using `strchr(ptr, '\n')` to identify individual log entries. If no newline is found (end_ptr is NULL), the loop breaks because it has reached the end of the current read buffer. It then sets the found newline character to a null terminator `(*end_ptr = '\0')`, isolating a single log entry as a string.
 5. Each isolated log entry is expected to contain an **offset**, a **length**, and **data** in the format `Offset: %ld, Length: %zu, Data: %[^\n]`. The function uses `sscanf` to extract these values into local variables offset, len, and data. If the parsing is successful (i.e., sscanf returns 3), it proceeds to apply this change.
 6. For each parsed log entry, the function sets the write position in the merged file descriptor (to_fd) to the specified offset using `lseek(to_fd, offset, SEEK_SET)`. It then writes the data to the merged file at the specified position using `write(to_fd, data, strlen(data))`. This overwrites or adds data at the specific position, updating the merged file based on the log entry.
 7. After processing a log entry, the function updates the ptr to point to the start of the next log entry (ptr = end_ptr + 1) and continues processing until all log entries in the current read buffer are processed.
@@ -187,7 +188,7 @@ bool merge_all(char * source_file_path);
 3. Constructs a path for the merged file where all changes will be applied. This is done using snprintf to append the base file name to a predefined directory and prefix, resulting in a path like merge/merge_all_%s.
 4. Attempts to open or create the merged file in write mode (O_WRONLY), with flags to create the file if it doesn't exist (O_CREAT) and to truncate it if it does (O_TRUNC). Permissions are set to 0666.
 5. Reads from the source file in chunks (1024 bytes at a time) and writes each chunk directly to the merged file. This process continues until all content from the source file has been copied.
-6. Opens the directory logs where all log folders are assumed to be located. If successful, the function then iterates through each entry in this directory.
+6. Opens the directory logs where all log folders are located. If successful, the function then iterates through each entry in this directory.
 7. For each directory entry, the function checks if it is a directory (ignoring '.' and '..'). It constructs the path to this subdirectory and opens it.
 8. Within each log subdirectory, the function iterates through all entries. For each entry, it checks (using a function `is_log_file`) whether the file is a log file corresponding to the original source file. Constructs the path to each relevant log file and opens it in read-only mode. 
 9. For each opened log file, the function calls `apply_merge`, passing the file descriptor of the merged file and the log file. This function will apply the changes recorded in the log file to the merged file. Closes each log file descriptor after processing.
@@ -199,7 +200,7 @@ bool merge_all(char * source_file_path);
 
 ### Makefile
 ```Makefile
-# suppresses command echo - no prints to the terminal
+# no prints to the terminal
 .SILENT: 
 
 CC=gcc # compiler
@@ -208,11 +209,11 @@ CFLAGS=-I./include # tells compiler to include the include folder during header 
 # Name of the executable
 EXEC=psar
 
-# Source files - find all .c files
+# Source files
 SRC=$(wildcard src/*.c app/*.c)
 OBJS=$(SRC:.c=.o)
 
-# Default build target
+# build target
 all: $(EXEC)
 
 $(EXEC): $(OBJS)
@@ -227,7 +228,8 @@ clean:
 	@rm -rf logs/*
 	@rm -rf merge/*
 	@echo "Clean complete"
-# avoid confusion if files were named like this
+
+# in case if files were named like all or clean.
 .PHONY: all clean
 ```
 
@@ -244,7 +246,10 @@ Once the project has been compiled, you will find the executable `psar` in the p
 * `./psar merge_all -s [source_file]`: Merges all logs associated with a source file. Once this commmand finishes, see the `merge/` folder for the results.
 
 ### Demo
-```
+
+In the following example, we set up the project environment with `init`, creating the directories and files for testing. A file named `file0` is created with the content "`------------ Hello World! ------------`". The `test` command is run, which will start a process that attempts to write to the read only memory mapped file, triggering a segmentation fault which is handled with the mechanism explained [earlier in this document](#proposed-solution) (copy on write mechanism). A log file is then created with the changes, which will later be used by the `merge` command to generate an updated version of the file. 
+
+```bash
 paris@paris-pc:~/SAR/PSAR/PSAR$ lsmod | grep pteditor
 pteditor               24576  0
 paris@paris-pc:~/SAR/PSAR/PSAR$ make
