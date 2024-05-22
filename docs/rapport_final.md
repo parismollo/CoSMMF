@@ -17,6 +17,8 @@
     - [Demo](#demo)
   - [Conclusion](#conclusion)
   - [Acknowledgments](#acknowledgments)
+  - [Comparison of Memory-Mapped Files and Traditional I/O Operations](#comparison-of-memory-mapped-files-and-traditional-io-operations)
+  - [Benefits of the Proposed Solution](#benefits-of-the-proposed-solution)
 
 
 ## Contributors
@@ -294,3 +296,27 @@ The project demonstrates how to handle concurrent file access through memory map
 
 ## Acknowledgments
 This project would not have been possible without the advice and expertise of Pierre Sans, who generously took the time to answer questions and resolve doubts about the best way to implement the project. Likewise, we are grateful to the creators of the PTEditor API (https://github.com/misc0110/PTEditor), who developed this tool that facilitated the manipulation of page table entries.
+
+
+
+## Comparison of Memory-Mapped Files and Traditional I/O Operations
+
+| Aspect                    | Memory-Mapped Files                                                                 | Traditional I/O Operations                                                |
+|---------------------------|--------------------------------------------------------------------------------------|---------------------------------------------------------------------------|
+| **Performance**           | Faster access by eliminating explicit read/write system calls; relies on OS paging  | Multiple system calls introduce overhead due to context switching         |
+| **Convenience**           | Direct manipulation via memory operations (pointer dereferencing, array indexing)    | Requires explicit read/write calls and buffer management                  |
+| **Memory Management**     | Managed by the OS's virtual memory manager, potentially more efficient                | Handled by the application, can be less efficient                         |
+| **File Size & Address Space** | Limited by the process's addressable memory space (notable on 32-bit systems)     | Not limited by addressable memory, operates in chunks                     |
+
+
+## Benefits of the Proposed Solution
+
+| Benefit                    | Description                                                                                                    |
+|----------------------------|----------------------------------------------------------------------------------------------------------------|
+| **Consistent Read Access** | Multiple processes can map the same file and read its contents concurrently without issues, ensuring consistency. |
+| **Isolated Writes**        | Using copy-on-write ensures write operations by one process do not affect other processes' views, preventing data corruption. |
+| **Reduced I/O Overhead**   | Memory-mapped files allow direct access to file data in memory, eliminating explicit read/write system calls, reducing I/O overhead. |
+| **Efficient Memory Usage** | Copy-on-write copies only modified pages, saving memory compared to copying the entire file for each process. |
+| **Preservation of Original File** | The original file remains unchanged, ensuring data integrity, with modifications logged separately for auditing and rollback. |
+| **Controlled Merging**     | Changes are only applied to the original file during explicit merge operations, allowing for controlled updates. |
+| **Detailed Logs**          | Log files provide detailed information about modifications, aiding in debugging and error handling.            |
